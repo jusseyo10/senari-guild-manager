@@ -5,7 +5,6 @@ import {
   ArrowDownToLine,
   ArrowUpRight,
   CalendarDays,
-  Check,
   ChevronDown,
   ChevronLeft,
   ChevronRight,
@@ -27,7 +26,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 
 type Role = "길드장" | "부길드장" | "정예" | "길드원";
 type ContentType = "siege" | "raid" | "war";
-type Attendance = "참여" | "불참" | "미기록";
+type Attendance = "참여" | "불참" | "미기록" | "미참";
 type AttackResult = "승" | "패" | "미기록";
 
 type Member = {
@@ -59,6 +58,7 @@ type GuildData = {
 };
 
 const STORAGE_KEY = "senari-guild-manager-v1";
+const RAID_CYCLE_START = "2026-11-02";
 const SEASON_11: Season = {
   id: "season-11",
   number: 11,
@@ -129,14 +129,44 @@ function clamp(value: number, min: number, max: number) {
   return Math.min(max, Math.max(min, value));
 }
 
-function contentName(content: ContentType) {
-  return content === "siege" ? "요일별 공성전" : content === "raid" ? "강림원정대" : "길드전";
-}
-
 function getEntry(records: RecordEntry[], content: ContentType, date: string, memberId: string) {
   return records.find(
     (entry) => entry.content === content && entry.date === date && entry.memberId === memberId,
   );
+}
+
+function normalizeGuildData(value: Partial<GuildData>): GuildData {
+  const members = Array.isArray(value.members) ? value.members : makeInitialMembers();
+  const records = Array.isArray(value.records) ? value.records : [];
+  const normalizedRecords = new Map<string, RecordEntry>();
+
+  for (const entry of records) {
+    const normalized = entry.content === "raid"
+      ? { ...entry, date: cycleStartFor(entry.date) }
+      : entry;
+    const key = `${normalized.content}:${normalized.date}:${normalized.memberId}`;
+    const previous = normalizedRecords.get(key);
+    if (!previous || normalized.attendance === "참여") normalizedRecords.set(key, normalized);
+  }
+
+  return {
+    ...makeInitialData(),
+    ...value,
+    members,
+    records: [...normalizedRecords.values()],
+    season: value.season ?? SEASON_11,
+  };
+}
+
+function isCountedRecord(entry: RecordEntry): boolean {
+  if (entry.content === "raid") return entry.attendance === "참여";
+  if (entry.content === "siege") return entry.attendance !== "미기록";
+  return entry.attendance !== "미기록" || entry.attackCount > 0 || entry.defenseHolds > 0;
+}
+
+function isInSeason(entry: RecordEntry, season: Season): boolean {
+  const eventEnd = entry.content === "raid" ? shiftDate(entry.date, 13) : entry.date;
+  return entry.date <= season.end && eventEnd >= season.start;
 }
 
 export default function Home() {
@@ -146,7 +176,7 @@ export default function Home() {
   const [activePage, setActivePage] = useState<(typeof NAV_ITEMS)[number]["id"]>("records");
   const [search, setSearch] = useState("");
   const fileInput = useRef<HTMLInputElement>(null);
-  const remoteReady = useRef(false);
+  const localDbReady = useRef(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -157,17 +187,20 @@ export default function Home() {
         const result = (await response.json()) as { data: GuildData | null };
         if (cancelled) return;
         if (result.data) {
-          setData({
-            ...makeInitialData(),
-            ...result.data,
-            members: Array.isArray(result.data.members) ? result.data.members : makeInitialMembers(),
-            records: Array.isArray(result.data.records) ? result.data.records : [],
-            season: result.data.season ?? SEASON_11,
-          });
+          setData(normalizeGuildData(result.data));
         } else {
-          setData(makeInitialData());
+          const raw = localStorage.getItem(STORAGE_KEY);
+          if (raw) {
+            try {
+              setData(normalizeGuildData(JSON.parse(raw) as Partial<GuildData>));
+            } catch {
+              setData(makeInitialData());
+            }
+          } else {
+            setData(makeInitialData());
+          }
         }
-        remoteReady.current = true;
+        localDbReady.current = true;
         setSyncStatus("synced");
       } catch {
         if (cancelled) return;
@@ -175,17 +208,9 @@ export default function Home() {
           const raw = localStorage.getItem(STORAGE_KEY);
           if (raw) {
             const parsed = JSON.parse(raw) as Partial<GuildData>;
-            setData({
-              ...makeInitialData(),
-              ...parsed,
-              members: Array.isArray(parsed.members) ? parsed.members : makeInitialMembers(),
-              records: Array.isArray(parsed.records) ? parsed.records : [],
-              season: parsed.season ?? SEASON_11,
-            });
+            setData(normalizeGuildData(parsed));
           }
-        } catch {
-          localStorage.removeItem(STORAGE_KEY);
-        }
+        } catch { /* Keep a value that cannot be parsed for recovery. */ }
         setSyncStatus("offline");
       } finally {
         if (!cancelled) setReady(true);
@@ -198,7 +223,7 @@ export default function Home() {
   useEffect(() => {
     if (!ready) return;
     localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
-    if (!remoteReady.current) return;
+    if (!localDbReady.current) return;
     const timer = window.setTimeout(async () => {
       setSyncStatus("saving");
       try {
@@ -218,7 +243,7 @@ export default function Home() {
 
   const activeMembers = useMemo(() => data.members.filter((member) => !member.leftAt), [data.members]);
   const inSeason = useMemo(
-    () => data.records.filter((entry) => entry.date >= data.season.start && entry.date <= data.season.end),
+    () => data.records.filter((entry) => isInSeason(entry, data.season) && isCountedRecord(entry)),
     [data.records, data.season],
   );
   const siegeCount = inSeason.filter((entry) => entry.content === "siege").length;
@@ -423,7 +448,7 @@ export default function Home() {
         </header>
 
         <div className="content-wrap">
-          {syncStatus === "offline" && <div className="sync-warning"><span className="warning-mark">!</span><span>서버 저장에 연결되지 않아 현재 기기에 임시 보관 중입니다. </span><a href="/signin-with-chatgpt?return_to=%2F" target="_top">다시 로그인</a></div>}
+          {syncStatus === "offline" && <div className="sync-warning"><span className="warning-mark">!</span><span>로컬 DB에 연결되지 않아 현재 브라우저에 임시 저장 중입니다. 서버 재실행 후 이 페이지를 새로고침하면 DB에 저장됩니다.</span></div>}
           {activePage === "overview" && (
             <>
               <div className="page-heading heading-row">
@@ -458,7 +483,7 @@ export default function Home() {
                   <div className="panel-heading"><div><p className="section-kicker">SEASON TRACKER</p><h3>콘텐츠별 기록 현황</h3></div><button className="text-button" onClick={() => setActivePage("records")}>기록 관리 <ArrowUpRight size={14} /></button></div>
                   <div className="content-trackers">
                     <TrackerRow icon={<Swords size={17} />} iconClass="tracker-blue" title="요일별 공성전" subtitle="매일 참여와 성과 기록" count={siegeCount} unit="건" percent={Math.min(100, Math.round((siegeCount / (activeMembers.length * 42)) * 100))} />
-                    <TrackerRow icon={<Activity size={17} />} iconClass="tracker-purple" title="강림원정대" subtitle="2주 주기 참여와 성과 기록" count={raidCount} unit="건" percent={Math.min(100, Math.round((raidCount / (activeMembers.length * 3)) * 100))} />
+                    <TrackerRow icon={<Activity size={17} />} iconClass="tracker-purple" title="강림원정대" subtitle="공격한 경우 2주에 한 번 참여 기록" count={raidCount} unit="건" percent={Math.min(100, Math.round((raidCount / (activeMembers.length * 3)) * 100))} />
                     <TrackerRow icon={<ShieldCheck size={17} />} iconClass="tracker-amber" title="길드전 전투" subtitle="토 · 월 · 수 · 총 18회" count={warBattles} unit="일" percent={Math.round((warBattles / 18) * 100)} />
                   </div>
                   <div className="panel-footer-note"><span className="note-mark">i</span> 미기록과 불참은 서로 다른 상태로 저장됩니다.</div>
@@ -479,7 +504,7 @@ export default function Home() {
                 </section>
               </div>
 
-              <div className="page-bottom-note"><CircleHelp size={14} /> 모든 데이터는 이 브라우저에 저장돼요. 정기적으로 백업 파일을 내려받아 주세요.</div>
+              <div className="page-bottom-note"><CircleHelp size={14} /> 모든 데이터는 이 PC의 로컬 DB에 저장돼요. 정기적으로 백업 파일을 내려받아 주세요.</div>
             </>
           )}
 
@@ -526,16 +551,17 @@ export default function Home() {
 type BoardFilter = "all" | ContentType;
 type WarEditorTarget = { memberId: string; date: string } | null;
 
-function mondayOf(dateKey: string) {
-  const date = new Date(`${dateKey}T12:00:00`);
-  date.setDate(date.getDate() - ((date.getDay() + 6) % 7));
+function shiftDate(dateKey: string, days: number) {
+  const date = new Date(`${dateKey}T00:00:00.000Z`);
+  date.setUTCDate(date.getUTCDate() + days);
   return date.toISOString().slice(0, 10);
 }
 
-function shiftDate(dateKey: string, days: number) {
-  const date = new Date(`${dateKey}T12:00:00`);
-  date.setDate(date.getDate() + days);
-  return date.toISOString().slice(0, 10);
+function cycleStartFor(dateKey: string) {
+  const date = new Date(`${dateKey}T00:00:00.000Z`);
+  const anchor = new Date(`${RAID_CYCLE_START}T00:00:00.000Z`);
+  const dayOffset = Math.floor((date.getTime() - anchor.getTime()) / 86400000);
+  return shiftDate(RAID_CYCLE_START, Math.floor(dayOffset / 14) * 14);
 }
 
 function warPhase(dateKey: string, season: Season): "prep" | "battle" | null {
@@ -567,23 +593,35 @@ function ParticipationBoard({
   onUpdateEntry: (content: ContentType, date: string, memberId: string, changes: Partial<RecordEntry>) => void;
   onUpdateDefense: (member: Member, defenseSet: boolean) => void;
 }) {
-  const [periodStart, setPeriodStart] = useState(() => mondayOf(SEASON_11.start));
+  const [periodStart, setPeriodStart] = useState(RAID_CYCLE_START);
   const [filter, setFilter] = useState<BoardFilter>("all");
   const [warEditor, setWarEditor] = useState<WarEditorTarget>(null);
+  useEffect(() => {
+    const today = new Date();
+    const todayKey = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, "0")}-${String(today.getDate()).padStart(2, "0")}`;
+    setPeriodStart(cycleStartFor(todayKey));
+  }, []);
   const dates = useMemo(() => Array.from({ length: 14 }, (_, index) => shiftDate(periodStart, index)), [periodStart]);
   const periodEnd = dates[13];
   const days = ["일", "월", "화", "수", "목", "금", "토"];
   const dateRecords = records.filter((entry) => entry.date >= periodStart && entry.date <= periodEnd);
   const siegeMarked = dateRecords.filter((entry) => entry.content === "siege" && entry.attendance !== "미기록").length;
-  const raidMarked = records.filter((entry) => entry.content === "raid" && entry.date === periodStart && entry.attendance !== "미기록").length;
+  const raidMarked = records.filter((entry) => entry.content === "raid" && entry.date === periodStart && entry.attendance === "참여").length;
   const warMarked = dateRecords.filter((entry) => entry.content === "war" && (entry.attendance !== "미기록" || entry.attackCount > 0 || entry.defenseHolds > 0)).length;
   const editorMember = warEditor ? members.find((member) => member.id === warEditor.memberId) : undefined;
   const editorEntry = warEditor ? getEntry(records, "war", warEditor.date, warEditor.memberId) : undefined;
   const editorAttackCount = editorEntry?.attackCount ?? 0;
 
-  const saveAttendance = (content: ContentType, date: string, member: Member) => {
+  const saveAttendance = (content: "siege", date: string, member: Member) => {
     const entry = getEntry(records, content, date, member.id);
     onUpdateEntry(content, date, member.id, { attendance: cycleAttendance(entry?.attendance) });
+  };
+
+  const saveRaidAttendance = (member: Member) => {
+    const entry = getEntry(records, "raid", periodStart, member.id);
+    onUpdateEntry("raid", periodStart, member.id, {
+      attendance: entry?.attendance === "참여" ? "미참" : "참여",
+    });
   };
 
   const dateCellEvents = (member: Member, date: string) => {
@@ -608,8 +646,8 @@ function ParticipationBoard({
           label="강림"
           attendance={entry?.attendance}
           kind="raid"
-          title={`강림원정대 ${dateLabel(periodStart)}부터 2주 주기 참여`}
-          onClick={() => saveAttendance("raid", periodStart, member)}
+          title={`강림원정대 ${dateLabel(periodStart)} 시작 주기 · 공격했을 때만 참여로 기록`}
+          onClick={() => saveRaidAttendance(member)}
         />,
       );
     }
@@ -655,13 +693,13 @@ function ParticipationBoard({
       <div className="board-toolbar">
         <div className="period-navigation">
           <button className="period-arrow" onClick={() => changePeriod(-1)} aria-label="이전 2주"><ChevronLeft size={17} /></button>
-          <div className="period-copy"><strong>{dateLabel(periodStart)} — {dateLabel(periodEnd)}</strong><span>2주 단위 · 월요일 시작</span></div>
+          <div className="period-copy"><strong>{dateLabel(periodStart)} — {dateLabel(periodEnd)}</strong><span>2026년 11월 2일 기준 · 2주 단위 월요일 시작</span></div>
           <button className="period-arrow" onClick={() => changePeriod(1)} aria-label="다음 2주"><ChevronRight size={17} /></button>
-          <label className="period-date-input"><CalendarDays size={15} /><input type="date" value={periodStart} onChange={(event) => { if (event.target.value) setPeriodStart(mondayOf(event.target.value)); }} /></label>
+          <label className="period-date-input"><CalendarDays size={15} /><input type="date" value={periodStart} onChange={(event) => { if (event.target.value) setPeriodStart(cycleStartFor(event.target.value)); }} /></label>
         </div>
         <div className="board-filter" role="tablist" aria-label="콘텐츠 필터">
           {([
-            ["all", "전체", dateRecords.filter((entry) => entry.attendance !== "미기록" || entry.attackCount > 0 || entry.defenseHolds > 0).length],
+            ["all", "전체", dateRecords.filter(isCountedRecord).length],
             ["siege", "공성전", siegeMarked],
             ["raid", "강림원정대", raidMarked],
             ["war", "길드전", warMarked],
@@ -673,7 +711,7 @@ function ParticipationBoard({
 
       <div className="board-notes">
         <span><span className="legend-dot siege-dot" />공성전은 매일 기록</span>
-        <span><span className="legend-dot raid-dot" />강림은 첫 월요일에 2주 주기 기록</span>
+        <span><span className="legend-dot raid-dot" />강림 기준일은 2026년 11월 2일, 주기마다 한 번 기록</span>
         <span><span className="legend-dot war-dot" />준비일 방어 상태는 수정 전까지 유지</span>
         <span className="no-score-note">현재 점수는 기록하지 않습니다.</span>
       </div>
@@ -705,7 +743,7 @@ function ParticipationBoard({
             </tbody>
           </table>
         </div>
-        <div className="calendar-footer"><span>버튼을 누르면 <strong>미기록 → 참여 → 불참 → 미기록</strong> 순으로 바뀝니다.</span><span>길드전 전투 버튼을 눌러 공격·수비 상세를 입력하세요.</span></div>
+        <div className="calendar-footer"><span>강림은 공격했을 때만 클릭해 <strong>미참 → 참여</strong>로 표시하세요. 기록은 2주 주기당 한 번입니다.</span><span>공성전·길드전은 각각의 버튼에서 기록합니다.</span></div>
       </section>
 
       {warEditor && editorMember && (
@@ -725,8 +763,11 @@ function ParticipationBoard({
 }
 
 function CalendarEventButton({ label, attendance, kind, onClick, title }: { label: string; attendance?: Attendance; kind: "siege" | "raid"; onClick: () => void; title?: string }) {
-  const status = attendance ?? "미기록";
-  return <button className={`calendar-event ${kind} ${status === "참여" ? "event-attended" : status === "불참" ? "event-absent" : "event-unmarked"}`} title={title ?? `${label}: ${status}`} onClick={onClick}><span className="event-short">{label}</span><span className="event-state">{status === "참여" ? "✓" : status === "불참" ? "×" : "·"}</span></button>;
+  const status = attendance ?? (kind === "raid" ? "미참" : "미기록");
+  const participated = status === "참여";
+  const absent = kind === "raid" ? !participated : status === "불참";
+  const stateLabel = kind === "raid" ? (participated ? "참여" : "미참") : participated ? "✓" : absent ? "×" : "·";
+  return <button className={`calendar-event ${kind} ${participated ? "event-attended" : absent ? "event-absent" : "event-unmarked"}`} title={title ?? `${label}: ${stateLabel}`} onClick={onClick}><span className="event-short">{label}</span><span className="event-state">{stateLabel}</span></button>;
 }
 
 function StatCard({ icon, label, value, suffix, detail, tone, compact = false }: { icon: React.ReactNode; label: string; value: string; suffix: string; detail: string; tone: string; compact?: boolean }) {

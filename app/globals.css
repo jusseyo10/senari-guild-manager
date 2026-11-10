@@ -340,7 +340,7 @@ button:disabled { cursor: not-allowed; opacity: .45; }
 .overall-score { color: #425c9f; font-size: 12px; }
 .overall-score small { margin-left: 3px; color: #97a4b7; font-size: 8px; font-weight: 500; }
 
-.season-settings-panel,.weights-panel,.data-tools-panel { padding: 19px 20px; margin-bottom: 15px; }
+.season-settings-panel,.data-tools-panel { padding: 19px 20px; margin-bottom: 15px; }
 .season-state { display: inline-flex; align-items: center; gap: 6px; color: #a28859; font-size: 9px; }
 .season-state > span { width: 6px; height: 6px; border-radius: 50%; background: #d6a547; }
 .season-state.state-live { color: #498f77; }
@@ -350,7 +350,6 @@ button:disabled { cursor: not-allowed; opacity: .45; }
 .season-date-grid input { height: 37px; padding: 0 10px; color: #4e5f77; border: 1px solid #e3e8ef; border-radius: 7px; outline: 0; background: #fcfdff; font-size: 10px; }
 .date-range-arrow { padding-bottom: 10px; color: #b1bbc7; text-align: center; }
 .season-note { margin-top: 17px; padding-top: 14px; border-top: 1px solid #eff2f5; }
-.weights-panel .panel-heading { align-items: flex-start; }
 .panel-subtitle { margin: 6px 0 0; color: #9aa5b2; font-size: 9px; }
 .weight-total { display: flex; flex-direction: column; align-items: flex-end; gap: 2px; }
 .weight-total strong { color: #526cbd; font-size: 20px; }
