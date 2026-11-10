@@ -1,0 +1,12 @@
+/node_modules/
+/.wrangler/
+/.local-runtime/
+/.next/
+/.vinext/
+/dist/
+next-env.d.ts
+*.tsbuildinfo
+.env*
+.dev.vars*
+*.pem
+.DS_Store
