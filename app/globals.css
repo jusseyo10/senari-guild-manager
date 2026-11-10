@@ -278,10 +278,6 @@ button:disabled { cursor: not-allowed; opacity: .45; }
 .entry-table th,.entry-table td { padding-right: 12px; padding-left: 12px; }
 .entry-table th:first-child,.entry-table td:first-child { padding-left: 20px; }
 .entry-table td { height: 58px; }
-.attendance-pill { min-width: 57px; height: 26px; display: inline-flex; align-items: center; justify-content: center; gap: 4px; padding: 0 8px; border: 1px solid transparent; border-radius: 6px; font-size: 9px; font-weight: 700; }
-.attendance-pill.is-present { color: #218765; border-color: #d2ede1; background: #edf9f3; }
-.attendance-pill.is-absent { color: #bc6870; border-color: #f3dfe1; background: #fff3f3; }
-.attendance-pill.is-empty { color: #97a2b0; border-color: #e8ecf1; background: #f9fafb; }
 .score-input-wrap { width: 86px; height: 28px; display: flex; align-items: center; padding: 0 7px; border: 1px solid #e5eaf0; border-radius: 6px; background: #fff; }
 .score-input-wrap input { width: 100%; min-width: 0; color: #4b5d75; border: 0; outline: 0; background: transparent; font-size: 10px; }
 .score-input-wrap input::placeholder { color: #bdc5cf; }
@@ -433,6 +429,8 @@ button:disabled { cursor: not-allowed; opacity: .45; }
 .calendar-event.war-prep.event-unset { color: #a77c36; border-color: #f2e7d3; background: #fff9ee; }
 .calendar-event.war-battle { color: #526bc1; border-color: #dfe7ff; background: #eef2ff; }
 .calendar-event.war-battle.event-recorded { color: #267d61; border-color: #d5ecdf; background: #eff9f3; }
+.calendar-event.war-battle { min-width: 68px; min-height: 28px; flex-direction: column; justify-content: center; gap: 2px; }
+.calendar-event.war-battle .war-results,.calendar-event.war-battle .war-defense-count { color: #75849a; font-size: 6px; font-weight: 600; }
 .calendar-event:hover { filter: brightness(.97); box-shadow: 0 1px 3px #1b30400c; }
 .calendar-empty { color: #d3d9e1; font-size: 8px; }
 .inactive-row { opacity: .48; }
@@ -447,6 +445,9 @@ button:disabled { cursor: not-allowed; opacity: .45; }
 .war-editor-field { min-height: 52px; display: flex; align-items: center; justify-content: space-between; gap: 14px; border-bottom: 1px solid #f0f2f5; color: #64748a; font-size: 10px; }
 .war-editor-field > span:first-child { font-weight: 650; }
 .war-editor-field small { margin-left: 5px; color: #a0aab6; font-size: 8px; font-weight: 400; }
+.war-result-summary { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 11px 12px; color: #61728a; background: #f7f9fc; border-bottom: 1px solid #edf0f4; }
+.war-result-summary strong { color: #314967; font-size: 12px; }
+.war-result-summary span { font-size: 8px; text-align: right; }
 .attack-outcome-list { padding: 7px 0; border-bottom: 1px solid #f0f2f5; }
 .attack-outcome-row { min-height: 38px; display: flex; align-items: center; justify-content: space-between; color: #8290a1; font-size: 9px; }
 .attack-outcome-row > div { display: flex; gap: 5px; }

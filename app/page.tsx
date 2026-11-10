@@ -159,9 +159,8 @@ function normalizeGuildData(value: Partial<GuildData>): GuildData {
 }
 
 function isCountedRecord(entry: RecordEntry): boolean {
-  if (entry.content === "raid") return entry.attendance === "참여";
-  if (entry.content === "siege") return entry.attendance !== "미기록";
-  return entry.attendance !== "미기록" || entry.attackCount > 0 || entry.defenseHolds > 0;
+  if (entry.content !== "war") return entry.attendance === "참여";
+  return entry.attackCount > 0 || entry.defenseHolds > 0;
 }
 
 function isInSeason(entry: RecordEntry, season: Season): boolean {
@@ -482,11 +481,11 @@ export default function Home() {
                 <section className="panel activity-panel">
                   <div className="panel-heading"><div><p className="section-kicker">SEASON TRACKER</p><h3>콘텐츠별 기록 현황</h3></div><button className="text-button" onClick={() => setActivePage("records")}>기록 관리 <ArrowUpRight size={14} /></button></div>
                   <div className="content-trackers">
-                    <TrackerRow icon={<Swords size={17} />} iconClass="tracker-blue" title="요일별 공성전" subtitle="매일 참여와 성과 기록" count={siegeCount} unit="건" percent={Math.min(100, Math.round((siegeCount / (activeMembers.length * 42)) * 100))} />
+                    <TrackerRow icon={<Swords size={17} />} iconClass="tracker-blue" title="요일별 공성전" subtitle="참여한 날짜만 체크" count={siegeCount} unit="건" percent={Math.min(100, Math.round((siegeCount / (activeMembers.length * 42)) * 100))} />
                     <TrackerRow icon={<Activity size={17} />} iconClass="tracker-purple" title="강림원정대" subtitle="공격한 경우 2주에 한 번 참여 기록" count={raidCount} unit="건" percent={Math.min(100, Math.round((raidCount / (activeMembers.length * 3)) * 100))} />
                     <TrackerRow icon={<ShieldCheck size={17} />} iconClass="tracker-amber" title="길드전 전투" subtitle="토 · 월 · 수 · 총 18회" count={warBattles} unit="일" percent={Math.round((warBattles / 18) * 100)} />
                   </div>
-                  <div className="panel-footer-note"><span className="note-mark">i</span> 미기록과 불참은 서로 다른 상태로 저장됩니다.</div>
+                  <div className="panel-footer-note"><span className="note-mark">i</span> 공성전·강림은 참여한 경우에만 기록하며, 길드전 참여는 공격 횟수로 계산합니다.</div>
                 </section>
 
                 <section className="panel quick-panel">
@@ -572,12 +571,6 @@ function warPhase(dateKey: string, season: Season): "prep" | "battle" | null {
   return null;
 }
 
-function cycleAttendance(value: Attendance | undefined): Attendance {
-  if (!value || value === "미기록") return "참여";
-  if (value === "참여") return "불참";
-  return "미기록";
-}
-
 function ParticipationBoard({
   members,
   records,
@@ -605,24 +598,23 @@ function ParticipationBoard({
   const periodEnd = dates[13];
   const days = ["일", "월", "화", "수", "목", "금", "토"];
   const dateRecords = records.filter((entry) => entry.date >= periodStart && entry.date <= periodEnd);
-  const siegeMarked = dateRecords.filter((entry) => entry.content === "siege" && entry.attendance !== "미기록").length;
+  const siegeMarked = dateRecords.filter((entry) => entry.content === "siege" && entry.attendance === "참여").length;
   const raidMarked = records.filter((entry) => entry.content === "raid" && entry.date === periodStart && entry.attendance === "참여").length;
-  const warMarked = dateRecords.filter((entry) => entry.content === "war" && (entry.attendance !== "미기록" || entry.attackCount > 0 || entry.defenseHolds > 0)).length;
+  const warMarked = dateRecords.filter((entry) => entry.content === "war" && (entry.attackCount > 0 || entry.defenseHolds > 0)).length;
   const editorMember = warEditor ? members.find((member) => member.id === warEditor.memberId) : undefined;
   const editorEntry = warEditor ? getEntry(records, "war", warEditor.date, warEditor.memberId) : undefined;
   const editorAttackCount = editorEntry?.attackCount ?? 0;
 
-  const saveAttendance = (content: "siege", date: string, member: Member) => {
+  const toggleParticipation = (content: "siege" | "raid", date: string, member: Member) => {
     const entry = getEntry(records, content, date, member.id);
-    onUpdateEntry(content, date, member.id, { attendance: cycleAttendance(entry?.attendance) });
-  };
-
-  const saveRaidAttendance = (member: Member) => {
-    const entry = getEntry(records, "raid", periodStart, member.id);
-    onUpdateEntry("raid", periodStart, member.id, {
+    onUpdateEntry(content, date, member.id, {
       attendance: entry?.attendance === "참여" ? "미참" : "참여",
     });
   };
+
+  const editorWins = editorEntry?.attacks.slice(0, editorAttackCount).filter((result) => result === "승").length ?? 0;
+  const editorLosses = editorEntry?.attacks.slice(0, editorAttackCount).filter((result) => result === "패").length ?? 0;
+  const editorUnrecorded = Math.max(0, editorAttackCount - editorWins - editorLosses);
 
   const dateCellEvents = (member: Member, date: string) => {
     const items: React.ReactNode[] = [];
@@ -634,7 +626,7 @@ function ParticipationBoard({
           label="공성"
           attendance={entry?.attendance}
           kind="siege"
-          onClick={() => saveAttendance("siege", date, member)}
+          onClick={() => toggleParticipation("siege", date, member)}
         />,
       );
     }
@@ -647,7 +639,7 @@ function ParticipationBoard({
           attendance={entry?.attendance}
           kind="raid"
           title={`강림원정대 ${dateLabel(periodStart)} 시작 주기 · 공격했을 때만 참여로 기록`}
-          onClick={() => saveRaidAttendance(member)}
+          onClick={() => toggleParticipation("raid", periodStart, member)}
         />,
       );
     }
@@ -666,15 +658,22 @@ function ParticipationBoard({
     }
     if ((filter === "all" || filter === "war") && phase === "battle") {
       const entry = getEntry(records, "war", date, member.id);
-      const hasDetails = entry && (entry.attendance !== "미기록" || entry.attackCount > 0 || entry.defenseHolds > 0);
+      const wins = entry?.attacks.slice(0, entry.attackCount).filter((result) => result === "승").length ?? 0;
+      const losses = entry?.attacks.slice(0, entry.attackCount).filter((result) => result === "패").length ?? 0;
+      const unrecorded = Math.max(0, (entry?.attackCount ?? 0) - wins - losses);
+      const attackLabel = entry?.attackCount ? "참여" : "미참";
+      const resultLabel = entry?.attackCount
+        ? `${wins}승 ${losses}패${unrecorded ? ` · 미입력 ${unrecorded}` : ""}`
+        : null;
+      const defenseLabel = entry?.defenseHolds ? `수비 ${entry.defenseHolds}회` : null;
       items.push(
         <button
           key="war-battle"
-          className={`calendar-event war-battle ${hasDetails ? "event-recorded" : ""}`}
-          title={`${dateLabel(date)} 길드전 전투 기록 열기`}
+          className={`calendar-event war-battle ${entry?.attackCount ? "event-recorded" : ""}`}
+          title={`${dateLabel(date)} 길드전 · 공격 ${attackLabel} ${entry?.attackCount ?? 0}회${resultLabel ? `, ${resultLabel}` : ""}${defenseLabel ? ` · ${defenseLabel}` : ""}`}
           onClick={() => setWarEditor({ memberId: member.id, date })}
         >
-          <span className="event-short">전투</span><span className="event-state">{hasDetails ? "기록" : "입력"}</span>
+          <span className="event-short">공격</span><span className="event-state">{attackLabel}</span>{resultLabel && <small className="war-results">{resultLabel}</small>}{defenseLabel && <small className="war-defense-count">{defenseLabel}</small>}
         </button>,
       );
     }
@@ -710,7 +709,7 @@ function ParticipationBoard({
       </div>
 
       <div className="board-notes">
-        <span><span className="legend-dot siege-dot" />공성전은 매일 기록</span>
+        <span><span className="legend-dot siege-dot" />공성전은 참여한 날짜만 클릭</span>
         <span><span className="legend-dot raid-dot" />강림 기준일은 2026년 11월 2일, 주기마다 한 번 기록</span>
         <span><span className="legend-dot war-dot" />준비일 방어 상태는 수정 전까지 유지</span>
         <span className="no-score-note">현재 점수는 기록하지 않습니다.</span>
@@ -743,18 +742,18 @@ function ParticipationBoard({
             </tbody>
           </table>
         </div>
-        <div className="calendar-footer"><span>강림은 공격했을 때만 클릭해 <strong>미참 → 참여</strong>로 표시하세요. 기록은 2주 주기당 한 번입니다.</span><span>공성전·길드전은 각각의 버튼에서 기록합니다.</span></div>
+        <div className="calendar-footer"><span>공성전·강림은 기본 <strong>미참 → 참여</strong>로 기록합니다. 강림은 2주 주기당 한 번입니다.</span><span>길드전은 공격 횟수·승패와 수비 횟수만 기록합니다.</span></div>
       </section>
 
       {warEditor && editorMember && (
         <div className="modal-backdrop" role="presentation" onMouseDown={() => setWarEditor(null)}>
           <section className="war-editor-card" role="dialog" aria-modal="true" aria-labelledby="war-editor-title" onMouseDown={(event) => event.stopPropagation()}>
             <div className="war-editor-heading"><div><p className="section-kicker">GUILD WAR BATTLE</p><h2 id="war-editor-title">{editorMember.name}<span> · {dateLabel(warEditor.date)}</span></h2></div><button className="close-button" onClick={() => setWarEditor(null)} aria-label="닫기"><X size={17} /></button></div>
-            <div className="war-editor-field"><span>전투 참여</span><button className={`attendance-pill ${editorEntry?.attendance === "참여" ? "is-present" : editorEntry?.attendance === "불참" ? "is-absent" : "is-empty"}`} onClick={() => onUpdateEntry("war", warEditor.date, editorMember.id, { attendance: cycleAttendance(editorEntry?.attendance) })}>{editorEntry?.attendance ?? "미기록"}</button></div>
-            <div className="war-editor-field attack-field"><span>공격권 사용 <small>최대 3회</small></span><select className="count-select" value={editorAttackCount} onChange={(event) => { const count = Number(event.target.value); const attacks = Array.from({ length: 3 }, (_, index) => index < count ? editorEntry?.attacks[index] ?? "미기록" : "미기록") as AttackResult[]; onUpdateEntry("war", warEditor.date, editorMember.id, { attackCount: count, attacks }); }}><option value={0}>0회</option><option value={1}>1회</option><option value={2}>2회</option><option value={3}>3회</option></select></div>
+            <div className="war-editor-field attack-field"><span>공격 횟수 <small>최대 3회</small></span><select className="count-select" value={editorAttackCount} onChange={(event) => { const count = Number(event.target.value); const attacks = Array.from({ length: 3 }, (_, index) => index < count ? editorEntry?.attacks[index] ?? "미기록" : "미기록") as AttackResult[]; onUpdateEntry("war", warEditor.date, editorMember.id, { attackCount: count, attacks }); }}><option value={0}>0회</option><option value={1}>1회</option><option value={2}>2회</option><option value={3}>3회</option></select></div>
+            <div className="war-result-summary"><strong>{editorAttackCount > 0 ? `참여 · ${editorWins}승 ${editorLosses}패` : "미참"}</strong><span>{editorAttackCount > 0 ? `공격 ${editorAttackCount}회${editorUnrecorded > 0 ? ` · 결과 미입력 ${editorUnrecorded}회` : ""}` : "공격한 경우에만 횟수를 입력하세요."}</span></div>
             {editorAttackCount > 0 && <div className="attack-outcome-list">{Array.from({ length: editorAttackCount }, (_, index) => { const result = editorEntry?.attacks[index] ?? "미기록"; return <div className="attack-outcome-row" key={index}><span>{index + 1}번째 공격</span><div><button className={`outcome-button ${result === "승" ? "win" : ""}`} onClick={() => { const attacks = [...(editorEntry?.attacks ?? ["미기록", "미기록", "미기록"])]; attacks[index] = result === "승" ? "미기록" : "승"; onUpdateEntry("war", warEditor.date, editorMember.id, { attacks }); }}>승리</button><button className={`outcome-button ${result === "패" ? "loss" : ""}`} onClick={() => { const attacks = [...(editorEntry?.attacks ?? ["미기록", "미기록", "미기록"])]; attacks[index] = result === "패" ? "미기록" : "패"; onUpdateEntry("war", warEditor.date, editorMember.id, { attacks }); }}>패배</button></div></div>; })}</div>}
-            <div className="war-editor-field"><span>방어 수비 횟수</span><div className="stepper"><button onClick={() => onUpdateEntry("war", warEditor.date, editorMember.id, { defenseHolds: Math.max(0, (editorEntry?.defenseHolds ?? 0) - 1) })}>−</button><strong>{editorEntry?.defenseHolds ?? 0}</strong><button onClick={() => onUpdateEntry("war", warEditor.date, editorMember.id, { defenseHolds: (editorEntry?.defenseHolds ?? 0) + 1 })}>+</button></div></div>
-            <p className="editor-note">참여, 공격 승패, 수비 횟수만 기록합니다. 점수 입력은 없습니다.</p>
+            <div className="war-editor-field"><span>수비 횟수</span><div className="stepper"><button onClick={() => onUpdateEntry("war", warEditor.date, editorMember.id, { defenseHolds: Math.max(0, (editorEntry?.defenseHolds ?? 0) - 1) })}>−</button><strong>{editorEntry?.defenseHolds ?? 0}</strong><button onClick={() => onUpdateEntry("war", warEditor.date, editorMember.id, { defenseHolds: (editorEntry?.defenseHolds ?? 0) + 1 })}>+</button></div></div>
+            <p className="editor-note">공격 횟수와 승패, 수비 횟수만 기록합니다. 수비 참여 여부나 점수는 기록하지 않습니다.</p>
           </section>
         </div>
       )}
@@ -763,11 +762,9 @@ function ParticipationBoard({
 }
 
 function CalendarEventButton({ label, attendance, kind, onClick, title }: { label: string; attendance?: Attendance; kind: "siege" | "raid"; onClick: () => void; title?: string }) {
-  const status = attendance ?? (kind === "raid" ? "미참" : "미기록");
-  const participated = status === "참여";
-  const absent = kind === "raid" ? !participated : status === "불참";
-  const stateLabel = kind === "raid" ? (participated ? "참여" : "미참") : participated ? "✓" : absent ? "×" : "·";
-  return <button className={`calendar-event ${kind} ${participated ? "event-attended" : absent ? "event-absent" : "event-unmarked"}`} title={title ?? `${label}: ${stateLabel}`} onClick={onClick}><span className="event-short">{label}</span><span className="event-state">{stateLabel}</span></button>;
+  const participated = attendance === "참여";
+  const stateLabel = participated ? "참여" : "미참";
+  return <button className={`calendar-event ${kind} ${participated ? "event-attended" : "event-absent"}`} title={title ?? `${label}: ${stateLabel}`} onClick={onClick}><span className="event-short">{label}</span><span className="event-state">{stateLabel}</span></button>;
 }
 
 function StatCard({ icon, label, value, suffix, detail, tone, compact = false }: { icon: React.ReactNode; label: string; value: string; suffix: string; detail: string; tone: string; compact?: boolean }) {
