@@ -5,7 +5,6 @@ import {
   ArrowDownToLine,
   ArrowUpRight,
   CalendarDays,
-  ChevronDown,
   ChevronLeft,
   ChevronRight,
   CircleHelp,
@@ -404,10 +403,9 @@ export default function Home() {
           </div>
         </div>
 
-        <div className="guild-switcher">
+        <div className="guild-identity">
           <div className="guild-emblem">S</div>
           <div className="guild-name-wrap"><strong>세나리</strong><span>길드 운영실</span></div>
-          <ChevronDown size={15} className="muted" />
         </div>
 
         <p className="nav-caption">관리 메뉴</p>
@@ -438,11 +436,10 @@ export default function Home() {
         <header className="topbar">
           <div className="breadcrumb"><span>세나리</span><span className="crumb-divider">/</span><strong>{NAV_ITEMS.find((item) => item.id === activePage)?.label}</strong></div>
           <div className="topbar-actions">
-            <div className="season-select"><span className="season-select-dot" /> 시즌 {data.season.number}<ChevronDown size={14} /></div>
+            <div className="season-indicator"><span className="season-indicator-dot" /> 시즌 {data.season.number}</div>
             <span className="topbar-divider" />
             <div className="topbar-date"><CalendarDays size={15} /> {new Intl.DateTimeFormat("ko-KR", { month: "long", day: "numeric", weekday: "short" }).format(today)}</div>
             <span className={`sync-pill ${syncStatus}`}><span />{syncStatus === "loading" ? "불러오는 중" : syncStatus === "saving" ? "저장 중" : syncStatus === "synced" ? "로컬 DB 저장됨" : "기기 임시 저장"}</span>
-            <button className="avatar-button" title="길드장 프로필">길</button>
           </div>
         </header>
 

@@ -30,7 +30,7 @@ button:disabled { cursor: not-allowed; opacity: .45; }
 .brand-mark { width: 39px; height: 39px; display: grid; place-items: center; color: #fff; border-radius: 12px; background: linear-gradient(145deg,#7795f5,#4565d0); box-shadow: 0 6px 16px #0b183b66; }
 .brand-title { margin: 0; color: #fff; font-size: 14px; font-weight: 800; letter-spacing: .18em; }
 .brand-subtitle { margin: 3px 0 0; color: #8090a8; font-size: 9px; font-weight: 700; letter-spacing: .2em; }
-.guild-switcher { height: 62px; display: flex; align-items: center; gap: 10px; margin: 29px 0 30px; padding: 0 11px; border: 1px solid #33435a; border-radius: 12px; background: #202f47; }
+.guild-identity { height: 62px; display: flex; align-items: center; gap: 10px; margin: 29px 0 30px; padding: 0 11px; border: 1px solid #33435a; border-radius: 12px; background: #202f47; }
 .guild-emblem { width: 33px; height: 33px; display: grid; place-items: center; color: #efcf8d; border: 1px solid #bd9d60; border-radius: 10px; background: #36445a; font-family: Georgia,serif; font-size: 18px; font-weight: 700; }
 .guild-name-wrap { display: flex; flex: 1; flex-direction: column; gap: 3px; }
 .guild-name-wrap strong { color: #f8fafd; font-size: 12px; }
@@ -64,11 +64,10 @@ button:disabled { cursor: not-allowed; opacity: .45; }
 .breadcrumb strong { color: #37465a; font-weight: 700; }
 .crumb-divider { color: #d4dae2; }
 .topbar-actions { display: flex; align-items: center; gap: 18px; }
-.season-select { display: flex; align-items: center; gap: 7px; color: #45546a; font-size: 11px; font-weight: 700; }
-.season-select-dot { width: 7px; height: 7px; border-radius: 50%; background: #6788ed; }
+.season-indicator { display: flex; align-items: center; gap: 7px; color: #45546a; font-size: 11px; font-weight: 700; }
+.season-indicator-dot { width: 7px; height: 7px; border-radius: 50%; background: #6788ed; }
 .topbar-divider { width: 1px; height: 20px; background: #e8ecf1; }
 .topbar-date { display: flex; align-items: center; gap: 7px; color: #778598; font-size: 11px; }
-.avatar-button { width: 31px; height: 31px; color: #fff; border: 0; border-radius: 50%; background: #607dcf; font-size: 11px; font-weight: 700; }
 .sync-pill { display: flex; align-items: center; gap: 6px; color: #60a486; font-size: 9px; white-space: nowrap; }
 .sync-pill > span { width: 6px; height: 6px; border-radius: 50%; background: #58b88d; }
 .sync-pill.loading,.sync-pill.saving { color: #a9874d; }
@@ -470,7 +469,7 @@ button:disabled { cursor: not-allowed; opacity: .45; }
 @media (max-width: 820px) {
   .sidebar { position: sticky; top: 0; width: 68px; height: 100vh; flex: 0 0 68px; padding: 17px 9px; }
   .brand-lockup { justify-content: center; padding: 0; }
-  .brand-lockup > div:last-child,.guild-switcher,.nav-caption,.nav-link span:nth-child(2),.nav-indicator,.season-mini-card,.profile-copy,.profile-button > svg { display: none; }
+  .brand-lockup > div:last-child,.guild-identity,.nav-caption,.nav-link span:nth-child(2),.nav-indicator,.season-mini-card,.profile-copy,.profile-button > svg { display: none; }
   .brand-mark { width: 39px; }
   .main-nav { margin-top: 30px; }
   .nav-link { justify-content: center; padding: 0; }
@@ -496,7 +495,7 @@ button:disabled { cursor: not-allowed; opacity: .45; }
   .topbar-date svg { width: 17px; height: 17px; }
   .sync-pill { display: none; }
   .topbar-divider { display: none; }
-  .season-select { font-size: 9px; }
+  .season-indicator { font-size: 9px; }
   .content-wrap { padding: 24px 12px 20px; }
   .app-footer { padding: 13px 12px 15px; font-size: 7px; }
   .page-heading h1 { font-size: 22px; }
